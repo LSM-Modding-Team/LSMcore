@@ -6,23 +6,24 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
-import net.nicomar2009.lsmcore.window.model.WindowLayout;
 
-/** Parameters are used ONLY for admin catalog edits. Apply accepts an ID and resolves server data. */
-public record WindowRequest(UUID session,String dimension,Action action,boolean hasTarget,BlockPos target,String id,
-                            double width,double height,int columns,int rows,long revision) implements CustomPacketPayload {
-    public enum Action { SYNC, SAVE, DELETE, APPLY, RESET }
+/** Every response echoes session AND monotonically increasing request number.
+ * Design parameters are accepted only for authorized catalog editing; application resolves server IDs.
+ */
+public record WindowRequest(UUID session,long serial,String dimension,Action action,boolean hasTarget,BlockPos clicked,
+                            boolean manual,BlockPos first,BlockPos last,String json,long catalogRevision,
+                            long policyRevision,long placedRevision) implements CustomPacketPayload {
+    public enum Action { QUERY,SAVE,DELETE,APPLY,RESET,POLICY }
     public static final Type<WindowRequest> TYPE=new Type<>(Identifier.fromNamespaceAndPath("lsmcore","window_request"));
-    public static final StreamCodec<RegistryFriendlyByteBuf,WindowRequest> CODEC=StreamCodec.of((buf,value)-> {
-        buf.writeUUID(value.session()); buf.writeUtf(value.dimension(),256); buf.writeVarInt(value.action().ordinal()); buf.writeBoolean(value.hasTarget());
-        buf.writeBlockPos(value.target()); buf.writeUtf(value.id(),96); buf.writeDouble(value.width()); buf.writeDouble(value.height());
-        buf.writeVarInt(value.columns()); buf.writeVarInt(value.rows()); buf.writeLong(value.revision());
+    public static final StreamCodec<RegistryFriendlyByteBuf,WindowRequest> CODEC=StreamCodec.of((buf,p)-> {
+        buf.writeUUID(p.session()); buf.writeLong(p.serial()); buf.writeUtf(p.dimension(),256); buf.writeVarInt(p.action().ordinal());
+        buf.writeBoolean(p.hasTarget()); buf.writeBlockPos(p.clicked()); buf.writeBoolean(p.manual()); buf.writeBlockPos(p.first()); buf.writeBlockPos(p.last());
+        buf.writeUtf(p.json(),8192); buf.writeLong(p.catalogRevision()); buf.writeLong(p.policyRevision()); buf.writeLong(p.placedRevision());
     },buf-> {
-        UUID session=buf.readUUID(); String dimension=buf.readUtf(256); int action=buf.readVarInt();
-        if (action<0 || action>=Action.values().length) throw new IllegalArgumentException("Invalid window action");
-        return new WindowRequest(session,dimension,Action.values()[action],buf.readBoolean(),buf.readBlockPos(),buf.readUtf(96),
-                buf.readDouble(),buf.readDouble(),buf.readVarInt(),buf.readVarInt(),buf.readLong());
+        UUID session=buf.readUUID(); long serial=buf.readLong(); String dimension=buf.readUtf(256); int action=buf.readVarInt();
+        if (serial<1 || action<0 || action>=Action.values().length) throw new IllegalArgumentException("Invalid request header");
+        return new WindowRequest(session,serial,dimension,Action.values()[action],buf.readBoolean(),buf.readBlockPos(),
+                buf.readBoolean(),buf.readBlockPos(),buf.readBlockPos(),buf.readUtf(8192),buf.readLong(),buf.readLong(),buf.readLong());
     });
-    public WindowLayout proposedLayout() { return new WindowLayout(id,width,height,columns,rows); }
     @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
 }

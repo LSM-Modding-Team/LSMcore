@@ -19,7 +19,7 @@ public final class WindowGeometry {
         public Geometry { leaves = List.copyOf(leaves); }
     }
     /** Matches LSM's sized_pane_models: 1px rails on EACH sash, adjacent rails total 2px.
-     * There are no extra gaps or overlaps in the catalog layouts. Legacy phases are separate.
+     * There are no extra gaps or overlaps in catalog layouts. This profile applies regardless of placement date.
      * Source: LSMMod26.2Neoforge 826c791, SchoolProjectingWindowLayout and
      * tools/windows_and_enclosures/create_school_projecting_window_assets.py.
      */
@@ -58,11 +58,20 @@ public final class WindowGeometry {
         }
         return List.copyOf(result);
     }
+    private static final class Unit {
+        private static final Geometry GEOMETRY=calculate(net.nicomar2009.lsmcore.window.catalog.BaseLayouts.defaultLayout(),LayoutLimits.HARD);
+    }
+    public static List<Surface> individual(Rect available) {
+        return fragments(Unit.GEOMETRY,0,0,0,0,available);
+    }
     public record Occupancy(int columns, int rows) { public int cells() { return columns*rows; } }
     public static Occupancy occupancy(WindowLayout layout, double offsetX, double offsetY) {
-        LayoutValidator.validate(layout,LayoutLimits.HARD).requireValid();
+        LayoutValidator.intrinsic(layout).requireValid();
         if (!Double.isFinite(offsetX) || !Double.isFinite(offsetY) || offsetX<0 || offsetX>=1 || offsetY<0 || offsetY>=1)
             throw new IllegalArgumentException("Invalid grid offset");
-        return new Occupancy((int)Math.ceil(offsetX+layout.width()), (int)Math.ceil(offsetY+layout.height()));
+        Occupancy occupied=new Occupancy((int)Math.ceil(offsetX+layout.width()-Rect.EPSILON),
+                (int)Math.ceil(offsetY+layout.height()-Rect.EPSILON));
+        if (occupied.cells()>LayoutLimits.HARD.maxCells()) throw new IllegalArgumentException("cell_limit");
+        return occupied;
     }
 }

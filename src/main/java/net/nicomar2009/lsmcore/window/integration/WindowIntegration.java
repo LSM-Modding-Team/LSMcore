@@ -6,6 +6,10 @@ import net.minecraft.world.level.block.Block;
 
 /** Small opt-in registry. LSMMod/PaintingMod keep ownership of all their registrations. */
 public final class WindowIntegration {
+    public static final int API_VERSION=2;
+    /** Shared semantic family: normal and paintable adapters can agree without importing each other. */
+    public static final net.minecraft.resources.Identifier PROJECTING_FAMILY=
+            net.minecraft.resources.Identifier.fromNamespaceAndPath("lsmcore","projecting");
     private static final ConcurrentHashMap<Block,WindowAdapter> ADAPTERS=new ConcurrentHashMap<>();
     private WindowIntegration() {}
     public static void register(Block block,WindowAdapter adapter) {

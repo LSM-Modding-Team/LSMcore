@@ -13,8 +13,17 @@ public final class LayoutJson {
         return json;
     }
     public static WindowLayout read(JsonObject json) {
+        requireKeys(json,"id","width","height","columns","rows");
         return new WindowLayout(json.get("id").getAsString(),number(json,"width"),number(json,"height"),
                 integer(json,"columns"),integer(json,"rows"));
+    }
+    public static void requireKeys(JsonObject json,String... keys) {
+        if (json==null || !json.keySet().equals(java.util.Set.of(keys))) throw new IllegalArgumentException("unknown_data");
+    }
+    public static long longInteger(JsonObject json,String name) {
+        var value=json.getAsJsonPrimitive(name);
+        if (!value.isNumber()) throw new IllegalArgumentException("Expected integer: "+name);
+        return value.getAsBigDecimal().longValueExact();
     }
     public static double number(JsonObject json,String name) {
         var value=json.getAsJsonPrimitive(name);

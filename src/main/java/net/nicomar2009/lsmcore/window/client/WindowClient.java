@@ -24,6 +24,7 @@ public final class WindowClient {
         }));
     }
     @SubscribeEvent public static void nextFrame(ClientTickEvent.Post event) {
+        if (Minecraft.getInstance().level==null) ClientWindowViews.clear();
         if (!openRequested) return;
         openRequested=false;
         openEditor(); // Defer past ChatScreen closing after command execution.
@@ -37,9 +38,10 @@ public final class WindowClient {
         client.setScreen(new WindowEditorScreen(target,pos,client.level.dimension().identifier().toString()));
     }
     @SubscribeEvent public static void payloads(RegisterClientPayloadHandlersEvent event) {
+        event.register(net.nicomar2009.lsmcore.window.network.AssemblyUpdate.TYPE,(packet,context)->ClientWindowViews.accept(packet));
         event.register(WindowReply.TYPE,(reply,context)-> {
             Minecraft client=Minecraft.getInstance();
-            if (client.screen instanceof WindowEditorScreen screen && client.level!=null
+            if (client.screen instanceof WindowResponseScreen screen && client.level!=null
                     && client.level.dimension().identifier().toString().equals(reply.dimension())) screen.accept(reply);
         });
     }

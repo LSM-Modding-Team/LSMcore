@@ -7,7 +7,7 @@ import net.nicomar2009.lsmcore.window.model.Rect;
 public final class WindowConnections {
     private WindowConnections() {}
     public static boolean compatible(WindowCell a,WindowCell b) {
-        return a.assemblyId().equals(b.assemblyId()) && a.family().equals(b.family()) && a.facing()==b.facing()
+        return a.family().equals(b.family()) && a.facing()==b.facing()
                 && Math.abs(a.plane()-b.plane())<Rect.EPSILON;
     }
     public static boolean touches(BlockPos aPos,WindowCell a,BlockPos bPos,WindowCell b) {

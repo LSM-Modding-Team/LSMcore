@@ -1,86 +1,78 @@
 package net.nicomar2009.lsmcore.window.server;
 
+import com.google.gson.*;
 import java.io.IOException;
 import java.util.*;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.level.storage.LevelResource;
 import net.neoforged.neoforge.network.PacketDistributor;
-import net.nicomar2009.lsmcore.window.catalog.*;
+import net.nicomar2009.lsmcore.window.catalog.LayoutJson;
 import net.nicomar2009.lsmcore.window.config.WindowConfig;
+import net.nicomar2009.lsmcore.window.detection.DetectionResult;
 import net.nicomar2009.lsmcore.window.integration.WindowApplication;
-import net.nicomar2009.lsmcore.window.model.SavedSelection;
+import net.nicomar2009.lsmcore.window.model.*;
 import net.nicomar2009.lsmcore.window.network.*;
 
-/** Lazy world catalog, no tick handler and no world/chunk migration. Main-thread access only. */
+/** Main-thread requests. Rate-limited requests ALWAYS receive their correlated rejection. */
 public final class WindowServer {
-    private static final Map<MinecraftServer,WindowServer> WORLDS=new WeakHashMap<>();
-    private final WorldLayoutStore catalog;
-    private final Map<UUID,Long> requests=new HashMap<>();
-    private WindowServer(MinecraftServer server) {
-        catalog=new WorldLayoutStore(server.getWorldPath(LevelResource.ROOT).resolve("lsmcore/window-layouts.json"));
+    private static final Map<ServerPlayer,Long> LAST=new IdentityHashMap<>();
+    private WindowServer() {}
+    public static void stopped(MinecraftServer server) {
+        LAST.keySet().removeIf(player->player.level().getServer()==server); WindowSync.stopped(server); WindowState.stopped(server);
     }
-    public static void stopped(MinecraftServer server) { WORLDS.remove(server); }
-    public static void logout(ServerPlayer player) {
-        var state=WORLDS.get(player.level().getServer());
-        if (state!=null) state.requests.remove(player.getUUID());
-    }
+    public static void logout(ServerPlayer player) { LAST.remove(player); WindowSync.logout(player); }
     public static void handle(ServerPlayer player,WindowRequest request) {
-        MinecraftServer server=player.level().getServer();
-        if (server==null || !player.level().dimension().identifier().toString().equals(request.dimension())) return;
-        var state=WORLDS.computeIfAbsent(server,WindowServer::new);
-        long now=System.nanoTime();
-        Long last=state.requests.get(player.getUUID());
-        if (last!=null && now-last<250_000_000L) return; // Bound disk writes, geometry checks and response traffic.
-        state.requests.put(player.getUUID(),now);
-        String status="";
-        try { state.execute(player,request); status=request.action()==WindowRequest.Action.SYNC?"":"success"; }
-        catch (IllegalArgumentException invalid) {
-            String key=invalid.getMessage();
-            status=key!=null && key.matches("[a-z_]{1,64}")?key:"invalid";
-        } catch (IOException failure) {
-            status="storage_unavailable";
-            com.mojang.logging.LogUtils.getLogger().error("Cannot persist window catalog",failure);
-        } catch (RuntimeException failure) {
-            status="integration_error";
-            com.mojang.logging.LogUtils.getLogger().error("Window integration failed for {}",player.getUUID(),failure);
-        }
-        state.reply(player,request,status);
+        if (!player.level().dimension().identifier().toString().equals(request.dimension())) { reply(player,request,"stale_target",""); return; }
+        long now=System.nanoTime(); Long previous=LAST.get(player);
+        if (previous!=null && now-previous<250_000_000L) { reply(player,request,"rate_limited",""); return; }
+        LAST.put(player,now); String status="ok";
+        try { execute(player,request); }
+        catch (IllegalArgumentException invalid) { status=code(invalid.getMessage()); }
+        catch (IOException error) { status="storage_unavailable"; com.mojang.logging.LogUtils.getLogger().error("Window persistence failed",error); }
+        catch (RuntimeException error) { status="integration_error"; com.mojang.logging.LogUtils.getLogger().error("Window integration failed",error); }
+        try { reply(player,request,status,snapshot(player,request).encode()); }
+        catch (RuntimeException error) { reply(player,request,"storage_unavailable",""); }
     }
-    private void execute(ServerPlayer player,WindowRequest request) throws IOException {
-        var limits=WindowConfig.limits();
-        switch (request.action()) {
-            case SYNC -> { }
-            case SAVE, DELETE -> {
-                if (!WindowPermissions.administrator(player)) throw new IllegalArgumentException("permission");
-                if (request.action()==WindowRequest.Action.SAVE) catalog.save(request.proposedLayout(),request.revision(),limits);
-                else catalog.delete(request.id(),request.revision());
-            }
-            case APPLY, RESET -> {
-                if (!request.hasTarget()) throw new IllegalArgumentException("no_target");
-                if (request.revision()!=catalog.revision()) throw new IllegalArgumentException("stale_catalog");
-                var layout=request.action()==WindowRequest.Action.RESET?BaseLayouts.defaultLayout():catalog.resolve(request.id())
-                        .orElseThrow(()->new IllegalArgumentException("unknown_layout"));
-                WindowApplication.apply(player,request.target(),layout);
-            }
-        }
+    private static String code(String message) { return message!=null && message.matches("[a-z_]{1,64}")?message:"invalid"; }
+    private static JsonObject data(String body) {
+        try { return JsonParser.parseString(body).getAsJsonObject(); }
+        catch (RuntimeException malformed) { throw new IllegalArgumentException("invalid"); }
     }
-    private void reply(ServerPlayer player,WindowRequest request,String status) {
-        SavedSelection selection=null; boolean available=false;
-        net.nicomar2009.lsmcore.window.model.Rect surface=null;
+    private static void execute(ServerPlayer player,WindowRequest request) throws IOException {
+        var state=WindowState.of(player.level().getServer());
+        if (request.action()==WindowRequest.Action.QUERY) return;
+        state.policy.requireReadable();
+        if (request.action()==WindowRequest.Action.POLICY) {
+            if (!WindowPermissions.administrator(player)) throw new IllegalArgumentException("permission");
+            state.policy.update(WindowConfig.decode(data(request.json())),request.policyRevision()); return;
+        }
+        if (request.action()==WindowRequest.Action.RESET) {
+            if (!request.hasTarget()) throw new IllegalArgumentException("no_target");
+            WindowApplication.reset(player,request.clicked(),request.placedRevision()); return;
+        }
+        var data=data(request.json());
+        if (request.action()==WindowRequest.Action.SAVE || request.action()==WindowRequest.Action.DELETE) {
+            if (!WindowPermissions.administrator(player)) throw new IllegalArgumentException("permission");
+            if (request.action()==WindowRequest.Action.SAVE) state.catalog.save(LayoutJson.read(data),request.catalogRevision(),state.policy.limits());
+            else state.catalog.delete(data.get("id").getAsString(),request.catalogRevision()); return;
+        }
+        if (!request.hasTarget()) throw new IllegalArgumentException("no_target");
+        if (request.policyRevision()!=state.policy.revision() || request.catalogRevision()!=state.catalog.revision()) throw new IllegalArgumentException("stale_catalog");
+        var layout=state.catalog.resolve(data.get("id").getAsString()).orElseThrow(()->new IllegalArgumentException("unknown_layout"));
+        WindowApplication.apply(player,request.clicked(),request.manual(),request.first(),request.last(),layout,request.placedRevision());
+    }
+    private static WindowSnapshot snapshot(ServerPlayer player,WindowRequest request) {
+        var state=WindowState.of(player.level().getServer()); var store=state.assemblies(player.level());
+        EffectiveWindow result=new EffectiveWindow(EffectiveWindow.Mode.UNAVAILABLE,DetectionResult.error("no_target"),null,null);
         if (request.hasTarget()) {
-            try {
-                var target=WindowApplication.target(player,request.target());
-                selection=target.owner().readSelection(player.level(),target.assembly()).orElseGet(()->SavedSelection.of(BaseLayouts.defaultLayout()));
-                available=true; surface=target.assembly().available();
-            } catch (RuntimeException unavailable) {
-                if (status.isEmpty()) status=unavailable instanceof IllegalArgumentException && "no_integration".equals(unavailable.getMessage())
-                        ?"no_integration":"target_unavailable";
-            }
+            try { result=WindowApplication.inspect(player,request.clicked(),request.manual(),request.first(),request.last()); }
+            catch (RuntimeException unavailable) { result=new EffectiveWindow(EffectiveWindow.Mode.UNAVAILABLE,DetectionResult.error(code(unavailable.getMessage())),null,null); }
         }
-        if (!catalog.writable() && status.isEmpty()) status="storage_unavailable";
-        var snapshot=new WindowSnapshot(catalog.revision(),WindowPermissions.administrator(player),catalog.writable(),available,
-                selection,surface,WindowConfig.limits(),List.copyOf(catalog.entries().values()),status);
-        PacketDistributor.sendToPlayer(player,new WindowReply(request.session(),player.level().dimension().identifier().toString(),snapshot.encode()));
+        return new WindowSnapshot(state.catalog.revision(),state.policy.revision(),store.revision(),WindowPermissions.administrator(player),
+                state.policy.readable() && state.catalog.writable() && store.readable(),state.policy.readable()?state.policy.limits():LayoutLimits.HARD,
+                List.copyOf(state.catalog.entries().values()),result);
+    }
+    private static void reply(ServerPlayer player,WindowRequest request,String status,String json) {
+        PacketDistributor.sendToPlayer(player,new WindowReply(request.session(),request.serial(),request.dimension(),status,json));
     }
 }

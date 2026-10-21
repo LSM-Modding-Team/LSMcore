@@ -24,6 +24,7 @@ public final class WorldLayoutStore {
         try {
             if (Files.size(file)>MAX_BYTES) throw new IOException("Window catalog exceeds size limit");
             var root=JsonParser.parseString(Files.readString(file,StandardCharsets.UTF_8)).getAsJsonObject();
+            LayoutJson.requireKeys(root,"version","profile","custom");
             if (LayoutJson.integer(root,"version")!=1 || !WindowLayout.PROFILE.equals(root.get("profile").getAsString()))
                 throw new IOException("Unsupported window catalog format");
             var array=root.getAsJsonArray("custom");

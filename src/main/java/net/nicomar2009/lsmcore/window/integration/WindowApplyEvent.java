@@ -20,6 +20,7 @@ public final class WindowApplyEvent extends Event implements ICancellableEvent {
     }
     public ServerPlayer player() { return player; }
     public WindowAssembly assembly() { return assembly; }
+    /** Null means authorized reset/removal, never a fabricated default snapshot. */
     public SavedSelection selection() { return selection; }
     public List<BlockPos> cells() { return cells; }
 }

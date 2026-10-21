@@ -4,29 +4,31 @@ import java.util.List;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.nicomar2009.lsmcore.window.model.SavedSelection;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Level;
+import net.nicomar2009.lsmcore.window.geometry.WindowGeometry;
 
-/** Register an adapter for consumer-owned blocks during common setup, on both logical sides.
- * All methods run on the server thread; never load chunks in these callbacks.
- * A renderer consumes SavedSelection + WindowGeometry; Core registers no blocks/models/materials.
+/** Register on common setup for consumer-owned blocks. No consumer-to-consumer imports needed.
+ * cell/individual are read-only, bounded, usable with client snapshots, and MUST NOT load chunks.
+ * Core alone owns assembly identity, membership and selections. Owners retain paint/solid/open data.
  */
 public interface WindowAdapter {
-    Optional<WindowAssembly> describe(ServerLevel level,BlockPos clicked);
-    Optional<WindowCell> cell(ServerLevel level,BlockPos pos);
-    /** Must enforce the owner's claims/locks and paint-surface permissions. No permissive default. */
+    /** Return true for unknown/invalid owner-specific selection data; Core will fail closed.
+     * This is a format/integrity check for any piece, never an age-based geometry rule.
+     */
+    default boolean hasUnmanagedConfiguration(BlockGetter level,BlockPos pos) { return false; }
+    Optional<WindowCell> cell(BlockGetter level,BlockPos pos);
     boolean mayConfigure(ServerPlayer player,BlockPos pos,Direction interactionFace);
-    /** Both adjacent adapters must consent. Core additionally requires actual touching surfaces. */
+    /** Both adapters must consent, including normal/paintable connections sharing a family. */
     boolean allowsConnection(WindowCell local,WindowCell neighbor);
-    Optional<SavedSelection> readSelection(ServerLevel level,WindowAssembly assembly);
-    /** Persist the complete versioned snapshot atomically in the owner's data and mark it dirty.
-     * Do not change registry IDs, opening/hinge states, paint data, or neighboring assemblies.
-     * Reject failures BEFORE modifying state. Do not resolve the ID again when rendering/loading.
+    /** Default: a closed unit sash clipped to the piece's original available surface.
+     * Override for original partial geometry; return cell-local closed surfaces, at most 32.
+     * Do not connect individual fallback pieces visually to an inferred larger opening.
      */
-    void writeSelection(ServerLevel level,WindowAssembly assembly,SavedSelection selection);
-    /** Invalidate only these affected cells and sync owner data to tracking clients.
-     * Include block-entity packets/model data/mesh invalidation appropriate to the consumer renderer.
-     */
-    void refreshRendering(ServerLevel level,WindowAssembly assembly,List<BlockPos> affectedCells);
+    default List<WindowGeometry.Surface> individual(BlockGetter level,BlockPos pos,WindowCell cell) {
+        return WindowGeometry.individual(cell.available());
+    }
+    /** Invalidate this cell's owner mesh/model data only; never change blocks or opening/paint data. */
+    void geometryChanged(Level level,BlockPos pos);
 }

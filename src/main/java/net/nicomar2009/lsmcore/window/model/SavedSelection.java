@@ -22,6 +22,7 @@ public record SavedSelection(int version, String profile, WindowLayout layout) {
     }
     /** Invalid/unknown saved formats throw; owner must preserve the original data, never silently reset it. */
     public static SavedSelection fromJson(JsonObject json) {
+        LayoutJson.requireKeys(json,"version","profile","layout");
         return new SavedSelection(LayoutJson.integer(json,"version"),json.get("profile").getAsString(),
                 LayoutJson.read(json.getAsJsonObject("layout")));
     }
