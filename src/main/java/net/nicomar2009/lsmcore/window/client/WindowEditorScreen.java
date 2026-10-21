@@ -41,8 +41,8 @@ public final class WindowEditorScreen extends Screen implements WindowResponseSc
         create=button("new",left+56,45,panel-56,this::draft);
         measure=button("measure",left,70,(panel-4)/2,this::measure);
         refresh=button("refresh",left+(panel+4)/2,70,(panel-4)/2,()->send(WindowRequest.Action.QUERY));
-        corners=button("rectangle",right,45,(panel-4)/2,()->minecraft.setScreen(new RectangleScreen(this,first,last)));
-        policy=button("policy",right+(panel+4)/2,45,(panel-4)/2,()->minecraft.setScreen(new WindowPolicyScreen(this,channel.dimension,channel.snapshot)));
+        corners=button("rectangle",right,45,(panel-4)/2,()->minecraft.setScreenAndShow(new RectangleScreen(this,first,last)));
+        policy=button("policy",right+(panel+4)/2,45,(panel-4)/2,()->minecraft.setScreenAndShow(new WindowPolicyScreen(this,channel.dimension,channel.snapshot)));
         String[] labels={"width","height","columns","rows"};
         for (int i=0;i<4;i++) {
             final int index=i; int x=left+(i%2)*(panel/2+2),y=108+(i/2)*32;

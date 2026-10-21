@@ -56,7 +56,7 @@ final class WindowPolicyScreen extends Screen implements WindowResponseScreen {
     }
     @Override public void tick() {
         super.tick(); channel.tick(); save.active=channel.pending==null && channel.snapshot!=null && channel.snapshot.administrator() && channel.snapshot.writable();
-        if (minecraft.level==null || !minecraft.level.dimension().identifier().toString().equals(channel.dimension)) minecraft.setScreen(null);
+        if (minecraft.level==null || !minecraft.level.dimension().identifier().toString().equals(channel.dimension)) minecraft.setScreenAndShow(null);
     }
     @Override public void extractRenderState(GuiGraphicsExtractor g,int x,int y,float tick) {
         g.fill(0,0,width,height,0xFF18212C); g.centeredText(font,title,width/2,10,0xFFFFFFFF);
@@ -65,6 +65,6 @@ final class WindowPolicyScreen extends Screen implements WindowResponseScreen {
         if (!channel.status.isEmpty()) g.text(font,WindowEditorScreen.error(channel.status),left,height-20,0xFFFFCC66);
         super.extractRenderState(g,x,y,tick);
     }
-    @Override public void onClose() { minecraft.setScreen(parent); }
+    @Override public void onClose() { minecraft.setScreenAndShow(parent); }
     @Override public boolean isPauseScreen() { return false; }
 }

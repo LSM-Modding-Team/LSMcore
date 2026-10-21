@@ -35,13 +35,13 @@ public final class WindowClient {
         if (client.player==null || client.level==null) return;
         boolean target=client.hitResult instanceof BlockHitResult;
         BlockPos pos=target?((BlockHitResult)client.hitResult).getBlockPos():BlockPos.ZERO;
-        client.setScreen(new WindowEditorScreen(target,pos,client.level.dimension().identifier().toString()));
+        client.setScreenAndShow(new WindowEditorScreen(target,pos,client.level.dimension().identifier().toString()));
     }
     @SubscribeEvent public static void payloads(RegisterClientPayloadHandlersEvent event) {
         event.register(net.nicomar2009.lsmcore.window.network.AssemblyUpdate.TYPE,(packet,context)->ClientWindowViews.accept(packet));
         event.register(WindowReply.TYPE,(reply,context)-> {
             Minecraft client=Minecraft.getInstance();
-            if (client.screen instanceof WindowResponseScreen screen && client.level!=null
+            if (client.gui.screen() instanceof WindowResponseScreen screen && client.level!=null
                     && client.level.dimension().identifier().toString().equals(reply.dimension())) screen.accept(reply);
         });
     }

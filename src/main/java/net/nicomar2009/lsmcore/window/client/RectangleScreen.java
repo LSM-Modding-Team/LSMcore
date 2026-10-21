@@ -42,6 +42,6 @@ final class RectangleScreen extends Screen {
         if (!error.isEmpty()) g.text(font,WindowEditorScreen.error(error),left,height-65,0xFFFF9999);
         super.extractRenderState(g,x,y,tick);
     }
-    @Override public void onClose() { minecraft.setScreen(parent); }
+    @Override public void onClose() { minecraft.setScreenAndShow(parent); }
     @Override public boolean isPauseScreen() { return false; }
 }
