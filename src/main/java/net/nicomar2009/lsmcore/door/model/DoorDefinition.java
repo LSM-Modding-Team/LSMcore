@@ -8,12 +8,16 @@ import net.nicomar2009.lsmcore.door.geometry.DoorBox;
  * Absolute bounds are computational safeguards, unrelated to projecting-window leaf limits.
  */
 public record DoorDefinition(Identifier type,DoorBox envelope,String controller,List<DoorCell> cells,
-                             List<DoorLeaf> leaves,List<DoorSurface> surfaces,DoorRemovalPolicy removalPolicy) {
+                             List<DoorLeaf> leaves,List<DoorSurface> surfaces,DoorRemovalPolicy removalPolicy,MotionPolicy motionPolicy,int schema) {
+    public enum MotionPolicy { RESTRICTIVE, VANILLA }
+    public DoorDefinition(Identifier type,DoorBox envelope,String controller,List<DoorCell> cells,List<DoorLeaf> leaves,List<DoorSurface> surfaces,DoorRemovalPolicy policy) {
+        this(type,envelope,controller,cells,leaves,surfaces,policy,MotionPolicy.RESTRICTIVE,1);
+    }
     public DoorDefinition(Identifier type,DoorBox envelope,String controller,List<DoorCell> cells,List<DoorLeaf> leaves,List<DoorSurface> surfaces) {
         this(type,envelope,controller,cells,leaves,surfaces,DoorRemovalPolicy.PLAYER_ONLY);
     }
     public DoorDefinition {
-        Objects.requireNonNull(type); Objects.requireNonNull(envelope); Objects.requireNonNull(removalPolicy); identifier(controller);
+        if(schema<1)throw new IllegalArgumentException("invalid_schema"); Objects.requireNonNull(motionPolicy); Objects.requireNonNull(type); Objects.requireNonNull(envelope); Objects.requireNonNull(removalPolicy); identifier(controller);
         if (type.toString().length()>128 || Math.max(Math.max(Math.abs(envelope.minX()),Math.abs(envelope.maxX())),
                 Math.max(Math.max(Math.abs(envelope.minY()),Math.abs(envelope.maxY())),Math.max(Math.abs(envelope.minZ()),Math.abs(envelope.maxZ()))))>32)
             throw new IllegalArgumentException("envelope_limit");

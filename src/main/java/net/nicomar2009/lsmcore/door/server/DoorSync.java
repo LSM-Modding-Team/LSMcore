@@ -21,7 +21,7 @@ public final class DoorSync {
         var store=DoorState.of(level); long revision=store.revision();
         if (!store.readable()) { send(player,level,chunk,revision,DoorUpdate.BLOCKED,""); return; }
         send(player,level,chunk,revision,DoorUpdate.BEGIN,"");
-        for (var view:store.inChunk(chunk)) send(player,level,chunk,revision,DoorUpdate.ENTRY,DoorJson.write(view.record()).toString());
+        for (var view:store.inChunk(chunk)) if(view.record().structure().plan().chunks().contains(chunk))send(player,level,chunk,revision,DoorUpdate.ENTRY,DoorJson.write(view.record()).toString());
         send(player,level,chunk,revision,DoorUpdate.END,"");
     }
     public static void unwatch(ChunkWatchEvent.UnWatch event) {
@@ -40,7 +40,7 @@ public final class DoorSync {
         WATCHES.forEach((player,dimensions)-> {
             if (player.level()!=level) return;
             for (ChunkPos chunk:chunks) if (dimensions.getOrDefault(dimension(level),Set.of()).contains(chunk))
-                send(player,level,chunk,revision,kind,body);
+                send(player,level,chunk,revision,next!=null&&!next.structure().plan().chunks().contains(chunk)?DoorUpdate.REMOVE:kind,next!=null&&!next.structure().plan().chunks().contains(chunk)?next.id().toString():body);
         });
     }
     public static void logout(ServerPlayer player) { WATCHES.remove(player); }

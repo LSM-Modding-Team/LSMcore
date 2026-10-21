@@ -6,11 +6,15 @@ import java.util.*;
  * PLACING/REMOVING are durable journal states, not chunk load/unload or ordinary leaf updates.
  */
 public record DoorRecord(UUID id,long revision,DoorStructure structure,Map<String,LeafState> leaves,
-                         Phase phase,Removal removal,boolean dropsClaimed) {
+                         Phase phase,Removal removal,boolean dropsClaimed,List<net.nicomar2009.lsmcore.door.geometry.DoorPlan.Slot> retiredProxies) {
+    public DoorRecord(UUID id,long revision,DoorStructure structure,Map<String,LeafState> leaves,Phase phase,Removal removal,boolean claimed) {
+        this(id,revision,structure,leaves,phase,removal,claimed,List.of());
+    }
     public enum Phase { PLACING, ACTIVE, REMOVING }
     public enum Removal { NONE, PLAYER, PLAYER_CREATIVE, INTEGRITY_LOSS, FAILED_PLACEMENT }
     public record LeafState(boolean open,boolean powered) {}
     public DoorRecord {
+        retiredProxies=List.copyOf(retiredProxies);if(retiredProxies.size()>512||retiredProxies.stream().anyMatch(p->!p.proxy()))throw new IllegalArgumentException("invalid_retired_proxies");
         Objects.requireNonNull(id); Objects.requireNonNull(structure); Objects.requireNonNull(phase); Objects.requireNonNull(removal);
         leaves=Map.copyOf(leaves);
         if (revision<1 || revision==Long.MAX_VALUE || leaves.size()!=structure.definition().leaves().size()) throw new IllegalArgumentException("invalid_record");
@@ -18,7 +22,7 @@ public record DoorRecord(UUID id,long revision,DoorStructure structure,Map<Strin
         if ((phase==Phase.REMOVING)!=(removal!=Removal.NONE) || dropsClaimed && phase!=Phase.REMOVING) throw new IllegalArgumentException("invalid_lifecycle");
     }
     public DoorRecord next(Map<String,LeafState> states,Phase phase,Removal reason,boolean claimed) {
-        return new DoorRecord(id,revision+1,structure,states,phase,reason,claimed);
+        return new DoorRecord(id,revision+1,structure,states,phase,reason,claimed,retiredProxies);
     }
     public static DoorRecord placing(DoorDefinition definition,DoorPlacement placement) {
         var states=new LinkedHashMap<String,LeafState>();

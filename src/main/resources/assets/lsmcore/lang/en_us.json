@@ -98,5 +98,18 @@
   "window.lsmcore.error.unknown_data": "Unknown or invalid data is retained and never treated as missing configuration.",
   "window.lsmcore.error.policy_bounds": "Invalid limits: use positive values within the absolute bounds.",
   "window.lsmcore.error.assembly_limit": "Storage reached its absolute assembly or membership limit.",
-  "screen.lsmcore.windows.preview_selected": "Selected design"
+  "screen.lsmcore.windows.preview_selected": "Selected design",
+  "door.lsmcore.error.space_occupied": "Placement space is occupied.",
+  "door.lsmcore.error.permission": "You do not have permission to change this whole door.",
+  "door.lsmcore.error.incomplete": "Required door chunks are not loaded.",
+  "door.lsmcore.error.unknown_structure": "Door data is not available.",
+  "door.lsmcore.error.storage_unavailable": "Door data could not be saved.",
+  "door.lsmcore.error.structure_broken": "The door structure is not available.",
+  "door.lsmcore.error.stale_structure": "Door state changed; try again.",
+  "door.lsmcore.error.structure_pending": "Door structure is still being recovered.",
+  "door.lsmcore.error.occluded": "A nearer surface covers this door.",
+  "door.lsmcore.error.no_surface": "No current door surface was selected.",
+  "door.lsmcore.error.ambiguous_surface": "Select the interior of one door leaf.",
+  "door.lsmcore.error.fixed_surface": "This panel is fixed.",
+  "door.lsmcore.error.out_of_reach": "The door is out of reach."
 }

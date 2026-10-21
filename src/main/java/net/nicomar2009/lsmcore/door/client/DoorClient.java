@@ -14,6 +14,8 @@ import net.nicomar2009.lsmcore.door.network.*;
 @EventBusSubscriber(modid=LSMCore.MOD_ID,value=Dist.CLIENT)
 public final class DoorClient {
     private DoorClient() {}
+    @SubscribeEvent public static void changed(DoorClientChangedEvent event) {net.nicomar2009.lsmcore.door.entity.DoorBodies.clientView=ClientDoors::get;net.nicomar2009.lsmcore.door.entity.DoorBodies.clientChanged(event.chunk==null?java.util.Set.of():ClientDoors.owners(event.chunk));}
+    @SubscribeEvent public static void renderers(net.neoforged.neoforge.client.event.EntityRenderersEvent.RegisterRenderers event) {event.registerEntityRenderer(net.nicomar2009.lsmcore.door.entity.DoorBodies.TYPE.get(),net.minecraft.client.renderer.entity.NoopRenderer::new);}
     @SubscribeEvent public static void payloads(RegisterClientPayloadHandlersEvent event) {
         event.register(DoorUpdate.TYPE,(packet,context)->ClientDoors.accept(packet));
         event.register(DoorReply.TYPE,(packet,context)->ClientDoors.reply(packet));

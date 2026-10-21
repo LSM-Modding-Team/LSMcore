@@ -27,6 +27,8 @@ public final class ClientDoors {
     private static UUID session=UUID.randomUUID(); private static long serial;
     private ClientDoors() {}
     /** Distinguishes unavailable/blocked storage from a ready chunk with no door. */
+    public static Set<UUID> owners(net.minecraft.world.level.ChunkPos chunk) {var view=CHUNKS.get(chunk);return view==null?Set.of():view.entries().keySet();}
+    public static Optional<DoorView> get(UUID id) {return Optional.ofNullable(LATEST.get(id));}
     public static Availability availability(BlockPos pos) {
         var chunk=new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4);
         return BLOCKED.contains(chunk)?Availability.BLOCKED:SYNCING.contains(chunk)?Availability.SYNCHRONIZING

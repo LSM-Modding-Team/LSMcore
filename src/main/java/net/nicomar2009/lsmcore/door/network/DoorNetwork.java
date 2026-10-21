@@ -7,7 +7,7 @@ import net.nicomar2009.lsmcore.door.server.DoorRequests;
 public final class DoorNetwork {
     private DoorNetwork() {}
     public static void register(RegisterPayloadHandlersEvent event) {
-        var registrar=event.registrar("1"); // MAIN handlers, never touch world state on network threads.
+        var registrar=event.registrar("2"); // MAIN handlers, never touch world state on network threads.
         registrar.playToServer(DoorRequest.TYPE,DoorRequest.CODEC,(packet,context)-> {
             if (context.player() instanceof ServerPlayer player) DoorRequests.handle(player,packet);
         });

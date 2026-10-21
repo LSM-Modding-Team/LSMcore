@@ -45,13 +45,14 @@ public final class DoorStore {
     public Optional<DoorView> at(BlockPos pos) { requireReadable(); return Optional.ofNullable(members.get(pos)).map(records::get); }
     public List<DoorView> inChunk(ChunkPos chunk) { requireReadable(); return chunks.getOrDefault(chunk,Set.of()).stream().map(records::get).toList(); }
     /** Internal service transaction. Persist FIRST, then expose indexes/derived pose; expected is record revision (0 for new). */
-    public void replace(UUID id,DoorRecord next,long expected) throws IOException {
+    public void replace(UUID id,DoorRecord next,long expected) throws IOException {replace(id,next,expected,false);}
+    public void replace(UUID id,DoorRecord next,long expected,boolean upgrade) throws IOException {
         requireReadable(); var old=records.get(id);
         if ((old==null?0:old.record().revision())!=expected || revision>=Long.MAX_VALUE-1) throw new IllegalArgumentException("stale_structure");
         DoorView view=null;
         if (next!=null) {
             if (!next.id().equals(id) || next.revision()!=expected+1) throw new IllegalArgumentException("invalid_revision");
-            if (old!=null && old.record().structure()!=next.structure()) throw new IllegalArgumentException("immutable_structure");
+            if (!upgrade && old!=null && old.record().structure()!=next.structure()) throw new IllegalArgumentException("immutable_structure");
             validate(next,old); view=DoorView.updated(next,old);
         }
         var json=new JsonObject(); json.addProperty("version",1); json.addProperty("revision",revision+1); var array=new JsonArray();
@@ -71,10 +72,12 @@ public final class DoorStore {
     private void install(DoorView view) {
         var r=view.record(); records.put(r.id(),view);
         r.structure().plan().slots().keySet().forEach(pos->members.put(pos,r.id()));
-        r.structure().plan().chunks().forEach(chunk->chunks.computeIfAbsent(chunk,key->new HashSet<>()).add(r.id()));
+        var observed=new HashSet<>(r.structure().plan().chunks());r.retiredProxies().forEach(p->observed.add(new ChunkPos(p.position().getX()>>4,p.position().getZ()>>4)));
+        observed.forEach(chunk->chunks.computeIfAbsent(chunk,key->new HashSet<>()).add(r.id()));
     }
     private void uninstall(DoorView view) {
         var r=view.record(); records.remove(r.id()); r.structure().plan().slots().keySet().forEach(pos->members.remove(pos,r.id()));
-        for (ChunkPos chunk:r.structure().plan().chunks()) { var ids=chunks.get(chunk); ids.remove(r.id()); if (ids.isEmpty()) chunks.remove(chunk); }
+        var observed=new HashSet<>(r.structure().plan().chunks());r.retiredProxies().forEach(p->observed.add(new ChunkPos(p.position().getX()>>4,p.position().getZ()>>4)));
+        for (ChunkPos chunk:observed) { var ids=chunks.get(chunk); ids.remove(r.id()); if (ids.isEmpty()) chunks.remove(chunk); }
     }
 }

@@ -21,6 +21,7 @@ public final class DoorService {
     private static final Map<ServerLevel,Set<UUID>> BUSY=new IdentityHashMap<>();
     private DoorService() {}
     public static Optional<DoorView> at(ServerLevel level,BlockPos pos) { return DoorState.of(level).at(pos); }
+    public static Optional<DoorView> get(ServerLevel level,UUID id) {return DoorState.of(level).get(id);}
     private static DoorAdapter adapter(DoorRecord r) {
         return Doors.adapter(r.structure().definition().type()).orElseThrow(()->new IllegalArgumentException("adapter_unavailable"));
     }
@@ -28,7 +29,7 @@ public final class DoorService {
         var level=player.level(); var store=DoorState.of(level);
         if (context.getLevel()!=level || context.getPlayer()!=player) throw new IllegalArgumentException("invalid_context");
         var r=DoorRecord.placing(definition,placement); var owner=adapter(r);
-        if (!player.isWithinBlockInteractionRange(r.structure().plan().controller(),0)) throw new IllegalArgumentException("out_of_reach");
+        if (!player.isWithinBlockInteractionRange(context.getClickedPos(),0)) throw new IllegalArgumentException("out_of_reach");
         for (var slot:r.structure().plan().slots().values()) {
             bounds(level,slot.position()); loaded(level,slot.position());
             if (store.at(slot.position()).isPresent() || !level.getBlockState(slot.position()).canBeReplaced(context)
@@ -60,7 +61,7 @@ public final class DoorService {
     public static DoorResult manual(ServerPlayer player,UUID id,BlockPos clicked,long expected,InteractionHand hand) throws IOException {
         var level=player.level(); var view=DoorState.of(level).get(id).orElseThrow(()->new IllegalArgumentException("unknown_structure"));
         var r=view.record(); active(r,expected); loaded(level,clicked);
-        if (!r.structure().plan().slots().containsKey(clicked) || !player.isWithinBlockInteractionRange(clicked,0)) throw new IllegalArgumentException("out_of_reach");
+        if (!view.geometry().cells().containsKey(clicked) || !player.isWithinBlockInteractionRange(clicked,0)) throw new IllegalArgumentException("out_of_reach");
         double reach=Math.min(32,player.blockInteractionRange());
         Vec3 from=player.getEyePosition(),to=from.add(player.getViewVector(1).scale(reach));
         rayLoaded(level,from,to);
@@ -90,7 +91,7 @@ public final class DoorService {
     private static DoorResult changeLeaf(ServerLevel level,DoorRecord r,DoorAdapter owner,String leaf,DoorRecord.LeafState state) throws IOException {
         enter(level,r.id());
         try {
-            if (state.open()!=r.leaves().get(leaf).open() && !owner.canMove(level,r,DoorMotion.of(r,leaf,state.open()))) throw new IllegalArgumentException("motion_obstructed");
+            if (state.open()!=r.leaves().get(leaf).open() && r.structure().definition().motionPolicy()==DoorDefinition.MotionPolicy.RESTRICTIVE && !owner.canMove(level,r,DoorMotion.of(r,leaf,state.open()))) throw new IllegalArgumentException("motion_obstructed");
             var states=new LinkedHashMap<>(r.leaves()); states.put(leaf,state);
             var next=r.next(states,DoorRecord.Phase.ACTIVE,DoorRecord.Removal.NONE,false); commit(level,r,next); return result("ok",next);
         } finally { leave(level,r.id()); }
@@ -116,6 +117,18 @@ public final class DoorService {
             return cleanup(level,r);
         } finally { leave(level,r.id()); }
     }
+    /** Entity interaction: server traces the real current surface, foreign blocks still occlude it. */
+    public static DoorResult breakSurface(ServerPlayer player,UUID id,long expected) throws IOException {
+        var level=player.level();var view=DoorState.of(level).get(id).orElseThrow(()->new IllegalArgumentException("unknown_structure"));
+        var r=view.record();active(r,expected);var owner=adapter(r);verify(level,r,owner);
+        Vec3 eye=player.getEyePosition(),end=eye.add(player.getViewVector(1).scale(Math.min(32,player.blockInteractionRange())));
+        rayLoaded(level,eye,end);var hit=DoorHit.pick(view,eye,end).orElseThrow(()->new IllegalArgumentException("no_surface"));
+        var block=level.clip(new ClipContext(eye,end,ClipContext.Block.OUTLINE,ClipContext.Fluid.NONE,player));
+        if(hit.ambiguous()||block.getType()!=HitResult.Type.MISS&&eye.distanceToSqr(block.getLocation())+1e-8<hit.distanceSquared())throw new IllegalArgumentException("occluded");
+        authorize(level,player,DoorAction.REMOVE,r,owner,false);enter(level,id);
+        try {return cleanup(level,beginRemoval(level,r,player.isCreative()?DoorRecord.Removal.PLAYER_CREATIVE:DoorRecord.Removal.PLAYER));}
+        finally {leave(level,id);}
+    }
     /** Owner onRemove hook ONLY when the block identity/UUID link was actually removed or replaced.
      * Never call for a leaf state update, neighbor notification or chunk unload. Unknown IDs are safe.
      */
@@ -134,6 +147,17 @@ public final class DoorService {
         var r=view.get().record(); var owner=adapter(r); enter(level,id);
         try {
             if (r.phase()==DoorRecord.Phase.ACTIVE) {
+                var replacement=owner.upgrade(r);
+                if(replacement.isPresent()) {
+                    var definition=replacement.get();
+                    if(!definition.type().equals(r.structure().definition().type())||!r.leaves().keySet().equals(definition.leaves().stream().map(DoorLeaf::id).collect(java.util.stream.Collectors.toSet())))throw new IllegalArgumentException("incompatible_upgrade");
+                    authorize(level,null,DoorAction.RECOVER,r,owner,false);
+                    var retired=new ArrayList<>(r.retiredProxies());r.structure().plan().slots().values().stream().filter(s->s.proxy()).forEach(retired::add);
+                    var next=new DoorRecord(r.id(),r.revision()+1,new DoorStructure(definition,r.structure().placement()),r.leaves(),r.phase(),r.removal(),r.dropsClaimed(),retired);
+                    DoorState.of(level).replace(id,next,r.revision(),true);DoorSync.changed(level,r,next);owner.changed(level,r,next);r=next;
+                }
+                r=retireProxies(level,r,owner);
+                net.nicomar2009.lsmcore.door.entity.DoorBodies.reconcile(level,r);
                 boolean broken=false;
                 for (var slot:r.structure().plan().slots().values()) if (level.hasChunkAt(slot.position()) && !owner.matches(level,r,slot)) { broken=true; break; }
                 if (!broken) return result("unchanged",r);
@@ -144,11 +168,20 @@ public final class DoorService {
             return cleanup(level,r);
         } finally { leave(level,id); }
     }
+    private static DoorRecord retireProxies(ServerLevel level,DoorRecord r,DoorAdapter owner) throws IOException {
+        if(r.retiredProxies().isEmpty())return r;authorize(level,null,DoorAction.RECOVER,r,owner,false);var pending=new ArrayList<net.nicomar2009.lsmcore.door.geometry.DoorPlan.Slot>();
+        for(var slot:r.retiredProxies()) {
+            if(!level.hasChunkAt(slot.position())) {pending.add(slot);continue;}
+            if(owner.matches(level,r,slot)) {owner.removeWithoutDrops(level,r,slot);if(owner.matches(level,r,slot))pending.add(slot);}
+        }
+        if(pending.size()==r.retiredProxies().size())return r;
+        var next=new DoorRecord(r.id(),r.revision()+1,r.structure(),r.leaves(),r.phase(),r.removal(),r.dropsClaimed(),pending);commit(level,r,next);return next;
+    }
     private static DoorRecord beginRemoval(ServerLevel level,DoorRecord r,DoorRecord.Removal reason) throws IOException {
         var next=r.next(r.leaves(),DoorRecord.Phase.REMOVING,reason,false); commit(level,r,next); return next;
     }
     private static DoorResult cleanup(ServerLevel level,DoorRecord r) throws IOException {
-        var owner=adapter(r); boolean incomplete=false;
+        var owner=adapter(r);r=retireProxies(level,r,owner);boolean incomplete=!r.retiredProxies().isEmpty();
         for (var slot:r.structure().plan().slots().values()) {
             if (!level.hasChunkAt(slot.position())) { incomplete=true; continue; }
             if (!owner.matches(level,r,slot)) continue; // Never delete unrelated replacement blocks.
@@ -181,12 +214,14 @@ public final class DoorService {
             if (player!=null && level.hasChunkAt(pos) && (!level.mayInteract(player,pos)
                     || !player.mayUseItemAt(pos,Direction.UP,player.getItemInHand(hand)))) throw new IllegalArgumentException("permission");
         }
-        var affected=r.structure().plan().slots().keySet();
+        var affected=new HashSet<>(r.structure().plan().slots().keySet());r.retiredProxies().forEach(s->affected.add(s.position()));
         if (!owner.authorize(level,player,action,r,affected)
                 || NeoForge.EVENT_BUS.post(new DoorPermissionEvent(level,player,action,r,affected)).isCanceled()) throw new IllegalArgumentException("permission");
     }
     private static void commit(ServerLevel level,DoorRecord old,DoorRecord next) throws IOException {
         UUID id=next==null?old.id():next.id(); DoorState.of(level).replace(id,next,old==null?0:old.revision());
+        try {net.nicomar2009.lsmcore.door.entity.DoorBodies.changed(level,old,next);}
+        catch(RuntimeException error) {log("Door body reconciliation failed after durable commit; retry through recovery",error);}
         try { DoorSync.changed(level,old,next); }
         catch (RuntimeException error) { log("Door synchronization failed after commit; state remains authoritative",error); }
         Doors.adapter((next==null?old:next).structure().definition().type()).ifPresent(owner-> {

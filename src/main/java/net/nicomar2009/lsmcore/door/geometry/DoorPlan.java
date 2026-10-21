@@ -5,8 +5,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;
 import net.nicomar2009.lsmcore.door.model.*;
 
-/** Compiled once per placement. Every closed/open/swept cell requires an owner carrier/proxy.
- * No moving shape is exposed outside [0,1] in a block's local VoxelShape.
+/** Compiled once per placement. Slots occupy only required closed cells in VANILLA policy;
+ * RESTRICTIVE additionally reserves its swept proxies. Observation chunks include final poses,
+ * without claiming world cells. All block fragments remain strictly cell-local.
  */
 public record DoorPlan(Map<BlockPos,Slot> slots,Map<String,List<DoorBox>> sweeps,BlockPos controller,Set<ChunkPos> chunks) {
     public static final int MAX_CELLS=512;
@@ -26,6 +27,7 @@ public record DoorPlan(Map<BlockPos,Slot> slots,Map<String,List<DoorBox>> sweeps
             if (cell.id().equals(definition.controller())) controller=world;
         }
         for (var surface:definition.surfaces()) {
+            if(definition.motionPolicy()==DoorDefinition.MotionPolicy.VANILLA)continue;
             var leaf=surface.leaf()==null?null:definition.leaf(surface.leaf());
             var swept=leaf==null?surface.selection():DoorTransform.sweep(surface.selection(),leaf);
             var world=DoorTransform.box(placement,null,false,swept);
@@ -37,6 +39,11 @@ public record DoorPlan(Map<BlockPos,Slot> slots,Map<String,List<DoorBox>> sweeps
         }
         sweeps.replaceAll((key,value)->List.copyOf(value));
         var chunks=new HashSet<ChunkPos>(); slots.keySet().forEach(pos->chunks.add(new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4)));
+        // Observation chunks include final poses, but these positions are NOT occupied or reserved.
+        for(var surface:definition.surfaces())for(boolean open:new boolean[]{false,true}) {
+            var leaf=surface.leaf()==null?null:definition.leaf(surface.leaf());
+            for(var pos:cells(DoorTransform.box(placement,leaf,open,surface.selection())))chunks.add(new ChunkPos(pos.getX()>>4,pos.getZ()>>4));
+        }
         return new DoorPlan(slots,sweeps,Objects.requireNonNull(controller),chunks);
     }
     public static List<BlockPos> cells(DoorBox box) {

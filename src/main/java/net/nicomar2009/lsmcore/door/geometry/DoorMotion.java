@@ -19,6 +19,6 @@ public record DoorMotion(String leaf,boolean opening,List<DoorBox> conservativeS
             current.add(DoorTransform.box(record.structure().placement(),leaf,record.leaves().get(id).open(),box));
             target.add(DoorTransform.box(record.structure().placement(),leaf,open,box));
         }
-        return new DoorMotion(id,open,record.structure().plan().sweeps().get(id),current,target);
+        return new DoorMotion(id,open,record.structure().plan().sweeps().getOrDefault(id,List.of()),current,target);
     }
 }

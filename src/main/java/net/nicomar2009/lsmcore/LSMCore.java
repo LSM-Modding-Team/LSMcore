@@ -18,6 +18,10 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 public final class LSMCore {
     public static final String MOD_ID="lsmcore";
     public LSMCore(IEventBus modBus) {
+        net.nicomar2009.lsmcore.door.entity.DoorBodies.register(modBus);
+        NeoForge.EVENT_BUS.addListener(net.nicomar2009.lsmcore.door.entity.DoorBodies::joined);
+        NeoForge.EVENT_BUS.addListener(net.nicomar2009.lsmcore.door.entity.DoorBodies::left);
+        NeoForge.EVENT_BUS.addListener(net.nicomar2009.lsmcore.door.entity.DoorBodies::unloaded);
         BaseLayouts.entries(); modBus.addListener(WindowNetwork::register); modBus.addListener(DoorNetwork::register);
         NeoForge.EVENT_BUS.addListener((ServerStoppedEvent event)->DoorRequests.stopped(event.getServer()));
         NeoForge.EVENT_BUS.addListener((ChunkWatchEvent.Sent event)->DoorSync.sent(event));

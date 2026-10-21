@@ -34,11 +34,12 @@ public record DoorGeometry(Map<BlockPos,Cell> cells,List<Surface> surfaces) {
             }
         }
         var cells=new HashMap<BlockPos,Cell>();
-        for (BlockPos pos:record.structure().plan().slots().keySet()) {
+        var positions=new HashSet<>(record.structure().plan().slots().keySet());positions.addAll(selections.keySet());positions.addAll(collisions.keySet());
+        for (BlockPos pos:positions) {
             var selection=selections.getOrDefault(pos,List.of()); var collision=collisions.getOrDefault(pos,List.of());
             cells.put(pos,new Cell(selection,collision,shape(selection.stream().map(Fragment::local).toList()),shape(collision)));
         }
-        if (!cells.keySet().containsAll(selections.keySet()) || !cells.keySet().containsAll(collisions.keySet()))
+        if (definition.motionPolicy()==DoorDefinition.MotionPolicy.RESTRICTIVE && (!record.structure().plan().slots().keySet().containsAll(selections.keySet()) || !record.structure().plan().slots().keySet().containsAll(collisions.keySet())))
             throw new IllegalArgumentException("geometry_outside_reservation");
         return new DoorGeometry(cells,surfaces);
     }

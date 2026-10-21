@@ -13,6 +13,11 @@ import net.nicomar2009.lsmcore.door.geometry.DoorMotion;
  * Stamp each carrier/proxy with structure UUID and slot identity. No leaf state is stored there.
  */
 public interface DoorAdapter {
+    /** Consumers may supply their own infrastructure entity type/renderer without renderer conflicts. */
+    default net.minecraft.world.entity.EntityType<net.nicomar2009.lsmcore.door.entity.DoorBody> bodyType() {return net.nicomar2009.lsmcore.door.entity.DoorBodies.TYPE.get();}
+    default boolean allowsEntityUse(ServerPlayer player,net.minecraft.world.InteractionHand hand) {return true;}
+    /** Explicit owner opt-in for known schema updates. Never changes a placed origin/identity. */
+    default java.util.Optional<DoorDefinition> upgrade(DoorRecord record) {return java.util.Optional.empty();}
     /** Verify actual owner block plus UUID/slot link, never merely a matching block ID. */
     boolean matches(ServerLevel level,DoorRecord record,DoorPlan.Slot slot);
     /** Additional support/fluid/replaceability constraints, after Core's basic checks. */

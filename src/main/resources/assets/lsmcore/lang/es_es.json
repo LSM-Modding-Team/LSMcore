@@ -98,5 +98,18 @@
   "window.lsmcore.error.unknown_data": "Hay datos desconocidos o inválidos. Se conservan y no se tratan como ausencia.",
   "window.lsmcore.error.policy_bounds": "Límites inválidos: revisa los máximos absolutos y usa valores positivos.",
   "window.lsmcore.error.assembly_limit": "El almacenamiento alcanzó su límite absoluto de conjuntos o pertenencias.",
-  "screen.lsmcore.windows.preview_selected": "Diseño seleccionado"
+  "screen.lsmcore.windows.preview_selected": "Diseño seleccionado",
+  "door.lsmcore.error.space_occupied": "El espacio de colocación está ocupado.",
+  "door.lsmcore.error.permission": "No tienes permiso para modificar esta puerta completa.",
+  "door.lsmcore.error.incomplete": "Los chunks necesarios de la puerta no están cargados.",
+  "door.lsmcore.error.unknown_structure": "Los datos de la puerta no están disponibles.",
+  "door.lsmcore.error.storage_unavailable": "No se pudieron guardar los datos de la puerta.",
+  "door.lsmcore.error.structure_broken": "La estructura de la puerta no está disponible.",
+  "door.lsmcore.error.stale_structure": "El estado de la puerta cambió; inténtalo de nuevo.",
+  "door.lsmcore.error.structure_pending": "La estructura de la puerta todavía se está recuperando.",
+  "door.lsmcore.error.occluded": "Una superficie más cercana tapa esta puerta.",
+  "door.lsmcore.error.no_surface": "No se seleccionó una superficie actual de la puerta.",
+  "door.lsmcore.error.ambiguous_surface": "Selecciona el interior de una hoja.",
+  "door.lsmcore.error.fixed_surface": "Este panel es fijo.",
+  "door.lsmcore.error.out_of_reach": "La puerta está fuera de alcance."
 }

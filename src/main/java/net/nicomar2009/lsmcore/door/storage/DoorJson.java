@@ -12,12 +12,13 @@ public final class DoorJson {
     public static final int MAX_JSON=65536;
     private DoorJson() {}
     public static JsonObject write(DoorRecord r) {
-        var j=new JsonObject(); j.addProperty("version",1); j.addProperty("id",r.id().toString()); j.addProperty("revision",r.revision());
+        var j=new JsonObject(); j.addProperty("version",2); j.addProperty("id",r.id().toString()); j.addProperty("revision",r.revision());
         j.add("definition",definition(r.structure().definition())); var p=r.structure().placement(); var placement=new JsonObject();
         placement.add("origin",pos(p.origin())); placement.addProperty("yaw",p.orientation().quarterTurns()); placement.addProperty("mirror",p.orientation().mirrored());
         j.add("placement",placement); var states=new JsonObject();
         r.leaves().forEach((key,value)-> { var state=new JsonObject(); state.addProperty("open",value.open()); state.addProperty("powered",value.powered()); states.add(key,state); });
         j.add("states",states); j.addProperty("phase",r.phase().name()); j.addProperty("removal",r.removal().name()); j.addProperty("claimed",r.dropsClaimed());
+        var retired=new JsonArray();for(var slot:r.retiredProxies())retired.add(pos(slot.position()));j.add("retiredProxies",retired);
         if (j.toString().length()>MAX_JSON) throw new IllegalArgumentException("snapshot_limit");
         return j;
     }
@@ -26,15 +27,18 @@ public final class DoorJson {
         return read(JsonParser.parseString(text).getAsJsonObject());
     }
     public static DoorRecord read(JsonObject j) {
-        keys(j,"version","id","revision","definition","placement","states","phase","removal","claimed");
-        if (integer(j,"version")!=1) throw new IllegalArgumentException("unknown_door_version");
+        int version=integer(j,"version");
+        if(version==1)keys(j,"version","id","revision","definition","placement","states","phase","removal","claimed");
+        else keys(j,"version","id","revision","definition","placement","states","phase","removal","claimed","retiredProxies");
+        if (version!=1&&version!=2) throw new IllegalArgumentException("unknown_door_version");
         var p=j.getAsJsonObject("placement"); keys(p,"origin","yaw","mirror");
         var structure=new DoorStructure(definition(j.getAsJsonObject("definition")),new DoorPlacement(pos(p.getAsJsonArray("origin")),new DoorOrientation(integer(p,"yaw"),bool(p,"mirror"))));
         var states=new LinkedHashMap<String,DoorRecord.LeafState>(); var stateJson=j.getAsJsonObject("states");
         if (stateJson.size()>8) throw new IllegalArgumentException("state_limit");
         stateJson.entrySet().forEach(entry-> { var state=entry.getValue().getAsJsonObject(); keys(state,"open","powered"); states.put(entry.getKey(),new DoorRecord.LeafState(bool(state,"open"),bool(state,"powered"))); });
+        var retired=new ArrayList<DoorPlan.Slot>();if(version==2)for(var value:array(j,"retiredProxies",512))retired.add(new DoorPlan.Slot(pos(value.getAsJsonArray()),null));
         return new DoorRecord(UUID.fromString(string(j,"id")),numberLong(j,"revision"),structure,states,
-                DoorRecord.Phase.valueOf(string(j,"phase")),DoorRecord.Removal.valueOf(string(j,"removal")),bool(j,"claimed"));
+                DoorRecord.Phase.valueOf(string(j,"phase")),DoorRecord.Removal.valueOf(string(j,"removal")),bool(j,"claimed"),retired);
     }
     /** Geometry-free state delta, only for an already observed immutable structure. */
     public static JsonObject writeState(DoorRecord r) {
@@ -54,10 +58,10 @@ public final class DoorJson {
         values.entrySet().forEach(entry-> { var state=entry.getValue().getAsJsonObject(); keys(state,"open","powered");
             states.put(entry.getKey(),new DoorRecord.LeafState(bool(state,"open"),bool(state,"powered"))); });
         return new DoorRecord(previous.id(),numberLong(j,"revision"),previous.structure(),states,
-                DoorRecord.Phase.valueOf(string(j,"phase")),DoorRecord.Removal.valueOf(string(j,"removal")),bool(j,"claimed"));
+                DoorRecord.Phase.valueOf(string(j,"phase")),DoorRecord.Removal.valueOf(string(j,"removal")),bool(j,"claimed"),previous.retiredProxies());
     }
     private static JsonObject definition(DoorDefinition d) {
-        var j=new JsonObject(); j.addProperty("type",d.type().toString()); j.add("envelope",box(d.envelope())); j.addProperty("controller",d.controller()); j.addProperty("removalPolicy",d.removalPolicy().name());
+        var j=new JsonObject(); j.addProperty("type",d.type().toString()); j.add("envelope",box(d.envelope())); j.addProperty("controller",d.controller()); j.addProperty("removalPolicy",d.removalPolicy().name());j.addProperty("motionPolicy",d.motionPolicy().name());j.addProperty("schema",d.schema());
         var cells=new JsonArray(); for (var c:d.cells()) { var v=new JsonObject(); v.addProperty("id",c.id()); v.add("offset",pos(c.offset())); cells.add(v); } j.add("cells",cells);
         var leaves=new JsonArray(); for (var l:d.leaves()) { var v=new JsonObject(); v.addProperty("id",l.id()); v.add("pivot",numbers(l.pivot().x(),l.pivot().y(),l.pivot().z()));
             v.addProperty("turn",l.turn()); v.addProperty("manual",l.manual()); v.addProperty("redstone",l.redstone().name()); leaves.add(v); } j.add("leaves",leaves);
@@ -66,14 +70,16 @@ public final class DoorJson {
         return j;
     }
     private static DoorDefinition definition(JsonObject j) {
-        keys(j,"type","envelope","controller","cells","leaves","surfaces","removalPolicy");
+        boolean modern=j.has("motionPolicy");
+        if(modern)keys(j,"type","envelope","controller","cells","leaves","surfaces","removalPolicy","motionPolicy","schema");
+        else keys(j,"type","envelope","controller","cells","leaves","surfaces","removalPolicy");
         var cells=new ArrayList<DoorCell>(); for (var e:array(j,"cells",128)) { var v=e.getAsJsonObject(); keys(v,"id","offset"); cells.add(new DoorCell(string(v,"id"),pos(v.getAsJsonArray("offset")))); }
         var leaves=new ArrayList<DoorLeaf>(); for (var e:array(j,"leaves",8)) { var v=e.getAsJsonObject(); keys(v,"id","pivot","turn","manual","redstone");
             var pivot=vector(v.getAsJsonArray("pivot"),3); leaves.add(new DoorLeaf(string(v,"id"),new DoorPoint(pivot[0],pivot[1],pivot[2]),integer(v,"turn"),bool(v,"manual"),DoorLeaf.Redstone.valueOf(string(v,"redstone")))); }
         var surfaces=new ArrayList<DoorSurface>(); for (var e:array(j,"surfaces",128)) { var v=e.getAsJsonObject(); keys(v,"id","part","leaf","selection","collision");
             var collision=new ArrayList<DoorBox>(); for (var b:array(v,"collision",8)) collision.add(box(b.getAsJsonArray()));
             surfaces.add(new DoorSurface(string(v,"id"),string(v,"part"),v.get("leaf").isJsonNull()?null:string(v,"leaf"),box(v.getAsJsonArray("selection")),collision)); }
-        return new DoorDefinition(Identifier.parse(string(j,"type")),box(j.getAsJsonArray("envelope")),string(j,"controller"),cells,leaves,surfaces,DoorRemovalPolicy.valueOf(string(j,"removalPolicy")));
+        return new DoorDefinition(Identifier.parse(string(j,"type")),box(j.getAsJsonArray("envelope")),string(j,"controller"),cells,leaves,surfaces,DoorRemovalPolicy.valueOf(string(j,"removalPolicy")),modern?DoorDefinition.MotionPolicy.valueOf(string(j,"motionPolicy")):DoorDefinition.MotionPolicy.RESTRICTIVE,modern?integer(j,"schema"):1);
     }
     public static void keys(JsonObject j,String... names) {
         if (!j.keySet().equals(Set.of(names))) throw new IllegalArgumentException("unknown_fields");
