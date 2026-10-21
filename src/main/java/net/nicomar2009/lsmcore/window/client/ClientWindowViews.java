@@ -26,7 +26,7 @@ public final class ClientWindowViews {
         final Map<BlockPos,UUID> members=new HashMap<>();
         void index(ChunkPos chunk) {
             members.clear();
-            for (var record:records.values()) for (BlockPos pos:record.cells()) if (new ChunkPos(pos).equals(chunk)) {
+            for (var record:records.values()) for (BlockPos pos:record.cells()) if (new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4).equals(chunk)) {
                 if (members.putIfAbsent(pos,record.id())!=null) throw new IllegalArgumentException("Overlapping replica");
             }
         }
@@ -53,7 +53,7 @@ public final class ClientWindowViews {
                     var old=view.records.put(record.id(),record);
                     if (packet.kind()==AssemblyUpdate.UPSERT) {
                         if (old!=null) for (BlockPos pos:old.cells()) view.members.remove(pos,old.id());
-                        for (BlockPos pos:record.cells()) if (new ChunkPos(pos).equals(chunk)) {
+                        for (BlockPos pos:record.cells()) if (new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4).equals(chunk)) {
                             UUID member=view.members.putIfAbsent(pos,record.id());
                             if (member!=null && !member.equals(record.id())) throw new IllegalArgumentException("Overlapping replica");
                         }
@@ -79,23 +79,23 @@ public final class ClientWindowViews {
         // Automatic base designs span less than one chunk per axis. A newly known boundary
         // can resolve cached incomplete queries in adjacent chunks without a world scan.
         for (int x=-1;x<=1;x++) for (int z=-1;z<=1;z++) if (x!=0 || z!=0) {
-            ChunkPos neighbor=new ChunkPos(chunk.x+x,chunk.z+z);
+            ChunkPos neighbor=new ChunkPos(chunk.x()+x,chunk.z()+z);
             if (CHUNKS.containsKey(neighbor)) invalidate(level,neighbor);
         }
     }
     public static EffectiveWindow query(ClientLevel level,BlockPos pos) {
         if (!Minecraft.getInstance().isSameThread()) throw new IllegalStateException("Query on the client thread and publish an immutable prepared geometry snapshot");
-        attach(level); View start=CHUNKS.get(new ChunkPos(pos));
+        attach(level); View start=CHUNKS.get(new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4));
         if (start==null || !start.ready || start.blocked)
             return new EffectiveWindow(EffectiveWindow.Mode.UNAVAILABLE,DetectionResult.error(start!=null && start.blocked?"unknown_data":"incomplete"),null,null);
         var base=new WorldSurfaceAccess(level,p-> {
-            var view=CHUNKS.get(new ChunkPos(p));
+            var view=CHUNKS.get(new ChunkPos(p.getX() >> 4, p.getZ() >> 4));
             if (view==null || !view.ready || view.blocked) throw new IllegalArgumentException("incomplete");
             return Optional.ofNullable(view.members.get(p));
         });
         SurfaceAccess access=new SurfaceAccess() {
             public boolean loaded(BlockPos p) {
-                var v=CHUNKS.get(new ChunkPos(p)); return base.loaded(p) && v!=null && v.ready && !v.blocked;
+                var v=CHUNKS.get(new ChunkPos(p.getX() >> 4, p.getZ() >> 4)); return base.loaded(p) && v!=null && v.ready && !v.blocked;
             }
             public Optional<net.nicomar2009.lsmcore.window.integration.WindowCell> cell(BlockPos p) { return base.cell(p); }
             public Optional<UUID> membership(BlockPos p) { return base.membership(p); }

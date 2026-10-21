@@ -36,7 +36,7 @@ public final class WindowSync {
     public static void logout(ServerPlayer player) { WATCHES.remove(player); }
     public static void stopped(MinecraftServer server) { WATCHES.keySet().removeIf(player->player.level().getServer()==server); }
     private static void send(ServerPlayer player,ServerLevel level,ChunkPos chunk,long revision,int kind,String json) {
-        PacketDistributor.sendToPlayer(player,new AssemblyUpdate(dimension(level),chunk.x,chunk.z,revision,kind,json));
+        PacketDistributor.sendToPlayer(player,new AssemblyUpdate(dimension(level),chunk.x(),chunk.z(),revision,kind,json));
     }
     private static void watchers(ServerLevel level,ChunkPos chunk,int kind,String json) {
         long revision=WindowState.of(level.getServer()).assemblies(level).revision();
@@ -53,7 +53,7 @@ public final class WindowSync {
     public static void invalidate(ServerLevel level,Collection<BlockPos> affected) {
         Set<ChunkPos> chunks=new HashSet<>();
         for (BlockPos pos:affected) {
-            chunks.add(new ChunkPos(pos));
+            chunks.add(new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4));
             if (level.hasChunkAt(pos)) WindowIntegration.adapter(level.getBlockState(pos).getBlock()).ifPresent(adapter->adapter.geometryChanged(level,pos));
         }
         for (ChunkPos chunk:chunks) {

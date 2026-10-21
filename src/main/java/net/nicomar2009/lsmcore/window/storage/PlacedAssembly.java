@@ -27,6 +27,6 @@ public record PlacedAssembly(UUID id,WindowAssembly assembly,SavedSelection sele
         return List.copyOf(cells);
     }
     public Set<ChunkPos> chunks() {
-        var chunks=new HashSet<ChunkPos>(); cells().forEach(pos->chunks.add(new ChunkPos(pos))); return Set.copyOf(chunks);
+        var chunks=new HashSet<ChunkPos>(); cells().forEach(pos->chunks.add(new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4))); return Set.copyOf(chunks);
     }
 }

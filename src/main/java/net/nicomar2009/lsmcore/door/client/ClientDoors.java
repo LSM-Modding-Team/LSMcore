@@ -7,7 +7,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.level.ChunkPos;
 import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import net.nicomar2009.lsmcore.door.model.*;
 import net.nicomar2009.lsmcore.door.storage.DoorJson;
 import net.nicomar2009.lsmcore.door.network.*;
@@ -28,13 +28,13 @@ public final class ClientDoors {
     private ClientDoors() {}
     /** Distinguishes unavailable/blocked storage from a ready chunk with no door. */
     public static Availability availability(BlockPos pos) {
-        var chunk=new ChunkPos(pos);
+        var chunk=new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4);
         return BLOCKED.contains(chunk)?Availability.BLOCKED:SYNCING.contains(chunk)?Availability.SYNCHRONIZING
                 :CHUNKS.containsKey(chunk)?Availability.READY:Availability.UNWATCHED;
     }
     /** May return the LAST valid view while synchronizing/blocked; check availability before applying actions. */
     public static Optional<DoorView> at(BlockPos pos) {
-        var chunk=CHUNKS.get(new ChunkPos(pos)); return chunk==null?Optional.empty():Optional.ofNullable(chunk.members().get(pos));
+        var chunk=CHUNKS.get(new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4)); return chunk==null?Optional.empty():Optional.ofNullable(chunk.members().get(pos));
     }
     /** Owner client use hook. Pick either this network route OR a server-only vanilla use hook,
      * never intentionally invoke both. Server recomputes ray, permissions and selected leaf.
@@ -46,7 +46,7 @@ public final class ClientDoors {
         var view=at(clicked).orElseThrow(()->new IllegalArgumentException("not_synchronized"));
         if (REQUESTS.size()>=32 || serial==Long.MAX_VALUE) throw new IllegalStateException("too_many_requests");
         Objects.requireNonNull(hand); long number=++serial; REQUESTS.put(number,view.record().id());
-        try { PacketDistributor.sendToServer(new DoorRequest(session,number,client.level.dimension().identifier().toString(),view.record().id(),clicked,view.record().revision(),hand)); }
+        try { ClientPacketDistributor.sendToServer(new DoorRequest(session,number,client.level.dimension().identifier().toString(),view.record().id(),clicked,view.record().revision(),hand)); }
         catch (RuntimeException error) { REQUESTS.remove(number); throw error; }
         return number;
     }
@@ -114,7 +114,7 @@ public final class ClientDoors {
     }
     private static void publish(ChunkPos chunk,long revision,Map<UUID,DoorView> entries) {
         var members=new HashMap<BlockPos,DoorView>();
-        for (var view:entries.values()) for (BlockPos pos:view.record().structure().plan().slots().keySet()) if (new ChunkPos(pos).equals(chunk)) {
+        for (var view:entries.values()) for (BlockPos pos:view.record().structure().plan().slots().keySet()) if (new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4).equals(chunk)) {
             if (members.putIfAbsent(pos,view)!=null) throw new IllegalArgumentException("overlapping_doors");
         }
         CHUNKS.put(chunk,new ChunkView(revision,Map.copyOf(entries),Map.copyOf(members)));

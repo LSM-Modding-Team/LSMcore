@@ -30,7 +30,7 @@ public final class DoorSync {
         send(event.getPlayer(),event.getLevel(),event.getPos(),0,DoorUpdate.UNWATCH,"");
     }
     private static void send(ServerPlayer player,ServerLevel level,ChunkPos chunk,long revision,int kind,String json) {
-        PacketDistributor.sendToPlayer(player,new DoorUpdate(dimension(level),chunk.x,chunk.z,revision,kind,json));
+        PacketDistributor.sendToPlayer(player,new DoorUpdate(dimension(level),chunk.x(),chunk.z(),revision,kind,json));
     }
     public static void changed(ServerLevel level,DoorRecord old,DoorRecord next) {
         var chunks=new HashSet<ChunkPos>(); if (old!=null) chunks.addAll(old.structure().plan().chunks()); if (next!=null) chunks.addAll(next.structure().plan().chunks());

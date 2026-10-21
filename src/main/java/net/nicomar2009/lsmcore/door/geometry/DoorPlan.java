@@ -36,7 +36,7 @@ public record DoorPlan(Map<BlockPos,Slot> slots,Map<String,List<DoorBox>> sweeps
             if (leaf!=null) sweeps.computeIfAbsent(leaf.id(),key->new ArrayList<>()).add(world);
         }
         sweeps.replaceAll((key,value)->List.copyOf(value));
-        var chunks=new HashSet<ChunkPos>(); slots.keySet().forEach(pos->chunks.add(new ChunkPos(pos)));
+        var chunks=new HashSet<ChunkPos>(); slots.keySet().forEach(pos->chunks.add(new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4)));
         return new DoorPlan(slots,sweeps,Objects.requireNonNull(controller),chunks);
     }
     public static List<BlockPos> cells(DoorBox box) {

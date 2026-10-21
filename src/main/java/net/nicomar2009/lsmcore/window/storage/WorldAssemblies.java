@@ -79,7 +79,7 @@ public final class WorldAssemblies {
         for (var record:records.values()) for (BlockPos pos:record.cells()) {
             if (members.putIfAbsent(pos,record.id())!=null) throw new IllegalArgumentException("explicit_boundary");
             if (members.size()>262144) throw new IllegalArgumentException("assembly_limit");
-            chunks.computeIfAbsent(new ChunkPos(pos),ignored->new HashSet<>()).add(record.id());
+            chunks.computeIfAbsent(new ChunkPos(pos.getX() >> 4, pos.getZ() >> 4),ignored->new HashSet<>()).add(record.id());
         }
         return new Index(members,chunks);
     }
