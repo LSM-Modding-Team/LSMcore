@@ -6,7 +6,7 @@ version="${mod_version}"
 displayName="${mod_name}"
 authors="LSM Modding Team"
 description='''
-Empty NeoForge mod template.
+Reusable projecting-window geometry, protected layouts and a server-authorized in-game editor.
 '''
 
 [[dependencies.${mod_id}]]
